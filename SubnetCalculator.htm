@@ -1,0 +1,159 @@
+<html>
+	<head>
+
+		<title>Subnet Calculator</title>
+		<style>
+			#content{
+				border: 0px solid;
+				display: inline-block;
+				margin: auto;
+				position: absolute;
+        top: 30%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+				text-align: center;
+			}
+			#header {
+				border: 0px solid;
+			}
+			#input {
+				border: 0px solid;
+			}
+			#output{
+				border: 0px solid;
+			}
+			#txtOutput {
+				border: 0px solid;
+				resize: none;
+				width: 24em;
+				height: 18em;
+				outline: none;
+				font-family: Courier New;
+			}
+			#inIpAddress {
+				width: 250px;
+				outline: none;
+			}
+			label {
+				margin-right: 1em;
+			}
+		</style>
+
+	</head>
+
+	<body>
+
+		<div id="content">
+			<div id="header">
+				<h1>Network</br>Subnet Calculator</h1>
+			</div>
+			</br>
+			<div id="input">
+				<label for="inIpAddress" title="- 10.0.0.0/24 &#10- 10.0.0.0 255.255.255.0">Network Subnet:</label>
+				<input type="text" id="inIpAddress" autofocus="">
+				<button type="button" onclick="parseIpAddress()">Go</button>
+			</div>
+			</br>
+			</br>
+			<div id="output">
+					<textarea readonly id="txtOutput"></textarea>
+			</div>
+		</div>
+
+		<script type="text/javascript">
+
+			document.onkeypress = function() {if (event.key === "Enter") {parseIpAddress()}}
+
+			function parseIpAddress() {
+				// Reset Form
+					resetForm();
+
+				// Variable Inputs and Validation
+				let input = document.getElementById('inIpAddress').value.trim();
+
+				if (regexMatch = input.match(/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s*\/\s*([0-9]+)$/)) {
+					var ipAddress = regexMatch[1];
+					var cidr = regexMatch[2];
+				} else if (regexMatch = input.match(/^([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)\s*([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)$/)) {
+					var ipAddress = regexMatch[1];
+					var mask = regexMatch[2];
+					var maskOctets = binaryParseOctets(mask);
+					var maskBitString = maskOctets[0] + maskOctets[1] + maskOctets[2] + maskOctets[3] + '0';  
+					var cidr = /^1+0+1+0?/.test(maskBitString) ? null : maskBitString.indexOf('0');
+				} else {
+					invalidInput('Invalid Input');
+					return;
+				}
+
+				if (!cidr || cidr < 0 || cidr > 32) {invalidInput('Invalid Input');return}
+
+				// Assign IP address to Array and convert to bits
+				var ipOctets = binaryParseOctets(ipAddress);
+
+				// Dertermine where work will be done
+				var activeOctet = Math.floor(cidr/8);
+				var subnetBits = 0;
+				var tmpCidr = cidr;
+
+				// Determine where bits will be manipulated
+				while (tmpCidr % 8 != 0) {
+					subnetBits++;tmpCidr--;
+				}
+
+				// Assign new bit arrays
+				var networkOctets = Object.assign([],ipOctets);
+				var broadcastOctets = Object.assign([],ipOctets);
+				var subnetMaskOctets = [];
+				var wildcardMaskOctets = [];
+
+				// Do work on arrays then convert to decimal
+				for (x = 0; x < 4; x++) {
+					networkOctets[x] = parseInt((x < activeOctet) ? networkOctets[x] : (x == activeOctet) ? networkOctets[x].substring(0,subnetBits) + '0'.repeat(8 - subnetBits) : '00000000',2);
+					broadcastOctets[x] = parseInt((x < activeOctet) ? broadcastOctets[x] : (x == activeOctet) ? broadcastOctets[x].substring(0,subnetBits) + '1'.repeat(8 - subnetBits) : '11111111',2);
+					subnetMaskOctets[x] = parseInt((x < activeOctet) ? '11111111' : (x == activeOctet) ? '1'.repeat(subnetBits) + '0'.repeat(8 - subnetBits) : '00000000',2);
+					wildcardMaskOctets[x] = parseInt((x < activeOctet) ? '00000000' : (x == activeOctet) ? '0'.repeat(subnetBits) + '1'.repeat(8 - subnetBits) : '11111111',2);
+				}
+
+				// Re-create IP Address and Mask strings
+				var offset = cidr <= 30 ? 1 : 0; 
+				var networkAddress = networkOctets[0] + '.' + networkOctets[1] + '.' + networkOctets[2] + '.' + networkOctets[3];
+				var broadcastAddress = broadcastOctets[0] + '.' + broadcastOctets[1] + '.' + broadcastOctets[2] + '.' + broadcastOctets[3];
+				var firstHost = networkOctets[0] + '.' + networkOctets[1] + '.' + networkOctets[2] + '.' + (networkOctets[3] + offset);
+				var lastHost = broadcastOctets[0] + '.' + broadcastOctets[1] + '.' + broadcastOctets[2] + '.' + (broadcastOctets[3] - offset);
+				var subnetMask = subnetMaskOctets[0] + '.' + subnetMaskOctets[1] + '.' + subnetMaskOctets[2] + '.' + subnetMaskOctets[3];
+				var wildcardMask = wildcardMaskOctets[0] + '.' + wildcardMaskOctets[1] + '.' + wildcardMaskOctets[2] + '.' + wildcardMaskOctets[3];
+
+				var subnetOutput = '';
+
+				subnetOutput += 'IP Address:          ' + ipAddress + '\n';
+				subnetOutput += 'Subnet Mask:         ' + subnetMask + '\n';
+				subnetOutput += 'Wildcard Mask:       ' + wildcardMask + '\n';
+				subnetOutput += 'CIDR:                ' + cidr + '\n';
+				subnetOutput += '\n';
+				subnetOutput += 'First Host:          ' + firstHost + '\n';
+				subnetOutput += 'Last Host:           ' + lastHost + '\n';
+				subnetOutput += '\n';
+				subnetOutput += 'Network Address:     ' + networkAddress + '\n';
+				subnetOutput += 'Broadcast Address:   ' + broadcastAddress;
+
+				document.getElementById('txtOutput').value = subnetOutput;
+			}
+
+			function binaryParseOctets(address) {
+				var octetArr = address.split('.').map(octet => (+octet).toString(2));
+				octetArr = octetArr.map(octet => '0'.repeat(8 - octet.length) + octet);
+				return octetArr;
+			}
+
+			function invalidInput(message) {
+				document.getElementById('txtOutput').value = message;
+			}
+
+			function resetForm() {
+				document.getElementById('txtOutput').value = '';
+			}
+		</script>
+
+	</body>
+
+</html>
